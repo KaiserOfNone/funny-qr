@@ -1,0 +1,8 @@
+[package]
+name = "funny-qr"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+image = "0.25.8"
+qrcode-generator = {version="5.0.0", features=[], default-features=false}
