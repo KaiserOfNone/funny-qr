@@ -1,12 +1,46 @@
+use clap::{Parser, ValueEnum};
 use image::{Rgba, RgbaImage};
 use qrcode_generator::QrCodeEcc;
 
 /*
 * TODO list:
- * - CLI calling for non hardcoded shit
  * - Add the alignment calculator function
  * - Add a "cleanup" step to add the alignment markers
 */
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum Tilers {
+    Base,
+    Bouncy,
+}
+
+impl ToString for Tilers {
+    fn to_string(&self) -> String {
+        match self {
+            Tilers::Base => "base".to_owned(),
+            Tilers::Bouncy => "bounce".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Parser)]
+struct Args {
+    /// Output file name
+    #[arg(short, long)]
+    target: Option<String>,
+
+    /// Tiler style: base, bounce (ignores block size)
+    #[arg(short, long, value_enum, default_value_t = Tilers::Base)]
+    style: Tilers,
+
+    /// Block size in pixels
+    #[arg(short, long, default_value_t = 32)]
+    block_size: u32,
+
+    /// Content to encode (must be last)
+    #[arg(required = true)]
+    content: String,
+}
 
 fn copy_paste(
     src: &RgbaImage,
@@ -87,7 +121,8 @@ struct BouncyTiler {
 }
 
 impl BouncyTiler {
-    fn new(width: u32, sheet: RgbaImage) -> BouncyTiler {
+    fn new(width: u32) -> BouncyTiler {
+        let sheet = image::open("sheet.png").unwrap().into_rgba8();
         let block_size = 32; // Constant from the sprite I'm using
         BouncyTiler {
             block_size,
@@ -123,15 +158,22 @@ impl Tiler for BouncyTiler {
 }
 
 fn main() {
-    let sheet = image::open("sheet.png").unwrap().into_rgba8();
+    let args = Args::parse();
+    let target = args.target.unwrap_or("out.png".to_owned());
+    let result: Vec<Vec<bool>> =
+        qrcode_generator::to_matrix(args.content, QrCodeEcc::Quartile).unwrap();
+    let width = result.len() as u32;
 
-    let result: Vec<Vec<bool>> = qrcode_generator::to_matrix("Lucas", QrCodeEcc::Quartile).unwrap();
-    let mut tiler = BouncyTiler::new(result.len() as u32, sheet);
+    let mut tiler: Box<dyn Tiler> = match args.style {
+        Tilers::Base => Box::new(BaseTiler::new(args.block_size, width)),
+        Tilers::Bouncy => Box::new(BouncyTiler::new(width)),
+    };
 
     for (y, row) in result.iter().enumerate() {
         for (x, val) in row.iter().enumerate() {
             tiler.tile(x as u32, y as u32, *val);
         }
     }
-    tiler.finalize().save("test.png").unwrap();
+
+    tiler.finalize().save(target).unwrap();
 }
