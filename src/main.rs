@@ -6,7 +6,6 @@ use qrcode_generator::QrCodeEcc;
 * TODO list:
  * - Add a "Stars" pattern
  * - Think of other patterns
- * - Embed the textures into the binary
  * - Separate the code into a library
  * - Create wasm bindings
 */
