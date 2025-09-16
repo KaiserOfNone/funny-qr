@@ -125,7 +125,8 @@ struct BouncyTiler {
 
 impl BouncyTiler {
     fn new(width: u32) -> BouncyTiler {
-        let sheet = image::open("sheet.png").unwrap().into_rgba8();
+        let bouncy_sheet = embed_file::embed_bytes!("../sheets/bouncy_sheet.png");
+        let sheet = image::load_from_memory(&bouncy_sheet).unwrap().into_rgba8();
         let block_size = 32; // Constant from the sprite I'm using
         BouncyTiler {
             block_size,

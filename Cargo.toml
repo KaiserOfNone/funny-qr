@@ -1,9 +1,13 @@
 [package]
 name = "funny-qr"
-version = "0.1.0"
+description = "A silly QR code generator"
+version = "1.0.0"
+authors = ["KaiserOfNone"]
 edition = "2024"
+license = "BSD-3-Clause"
 
 [dependencies]
 clap = { version = "4.5.47", features = ["derive"] }
+embed-file = "0.2.0"
 image = "0.25.8"
 qrcode-generator = {version="5.0.0", features=[], default-features=false}
