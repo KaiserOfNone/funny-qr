@@ -14,11 +14,12 @@ Or read the `--help` entry, it should be self explanatory I hope.
 Here are some generated QRs:
 
 ### Base
-[A regular QR code that links to wikipedia](./QR_examples/regular.png)
-
+![A regular QR code that links to wikipedia](./QR_examples/regular.png)
+How QR codes work
 
 ### bouncy
-[A bouncy QR code linking to the source of the idea](./QR_examples/bouncy.png)
+![A bouncy QR code linking to the source of the idea](./QR_examples/bouncy.png)
+The source of the idea
 
 ## Motivation
 
