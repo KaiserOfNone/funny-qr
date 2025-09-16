@@ -4,8 +4,11 @@ use qrcode_generator::QrCodeEcc;
 
 /*
 * TODO list:
- * - Add the alignment calculator function
- * - Add a "cleanup" step to add the alignment markers
+ * - Add a "Stars" pattern
+ * - Think of other patterns
+ * - Embed the textures into the binary
+ * - Separate the code into a library
+ * - Create wasm bindings
 */
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -157,6 +160,178 @@ impl Tiler for BouncyTiler {
     }
 }
 
+fn create_position_block(block_size: u32) -> RgbaImage {
+    let black = RgbaImage::from_pixel(block_size, block_size, Rgba([0, 0, 0, 255]));
+    let white = RgbaImage::from_pixel(block_size, block_size, Rgba([255, 255, 255, 255]));
+    let mut position_block = RgbaImage::new(7 * block_size, 7 * block_size);
+
+    // Outer black square (7x7)
+    for y in 0..7 {
+        for x in 0..7 {
+            copy_paste(
+                &black,
+                &mut position_block,
+                0,
+                0,
+                block_size,
+                block_size,
+                x * block_size,
+                y * block_size,
+            );
+        }
+    }
+    // Inner white square (5x5)
+    for y in 1..6 {
+        for x in 1..6 {
+            copy_paste(
+                &white,
+                &mut position_block,
+                0,
+                0,
+                block_size,
+                block_size,
+                x * block_size,
+                y * block_size,
+            );
+        }
+    }
+    // Center black square (3x3)
+    for y in 2..5 {
+        for x in 2..5 {
+            copy_paste(
+                &black,
+                &mut position_block,
+                0,
+                0,
+                block_size,
+                block_size,
+                x * block_size,
+                y * block_size,
+            );
+        }
+    }
+    position_block
+}
+
+fn create_alignment_block(block_size: u32) -> RgbaImage {
+    let black = RgbaImage::from_pixel(block_size, block_size, Rgba([0, 0, 0, 255]));
+    let white = RgbaImage::from_pixel(block_size, block_size, Rgba([255, 255, 255, 255]));
+    let mut alignment_block = RgbaImage::new(5 * block_size, 5 * block_size);
+
+    // Outer black square (5x5)
+    for y in 0..5 {
+        for x in 0..5 {
+            copy_paste(
+                &black,
+                &mut alignment_block,
+                0,
+                0,
+                block_size,
+                block_size,
+                x * block_size,
+                y * block_size,
+            );
+        }
+    }
+    // Inner white square (3x3)
+    for y in 1..4 {
+        for x in 1..4 {
+            copy_paste(
+                &white,
+                &mut alignment_block,
+                0,
+                0,
+                block_size,
+                block_size,
+                x * block_size,
+                y * block_size,
+            );
+        }
+    }
+    // Center black pixel (1x1)
+    copy_paste(
+        &black,
+        &mut alignment_block,
+        0,
+        0,
+        block_size,
+        block_size,
+        2 * block_size,
+        2 * block_size,
+    );
+
+    alignment_block
+}
+
+fn write_position_blocks(image: &mut RgbaImage, block_size: u32) {
+    let positions = [
+        (0, 0),                               // Top-left
+        (image.width() - 7 * block_size, 0),  // Top-right
+        (0, image.height() - 7 * block_size), // Bottom-left
+    ];
+    let position_block = create_position_block(block_size);
+    for &(px, py) in &positions {
+        copy_paste(
+            &position_block,
+            image,
+            0,
+            0,
+            7 * block_size,
+            7 * block_size,
+            px,
+            py,
+        );
+    }
+}
+
+fn alignment_coord_list(version: u32, size: u32) -> Vec<u32> {
+    if version == 1 {
+        return vec![];
+    }
+    let divs = 2 + version / 7;
+    let total_dist = size - 7 - 6;
+    let divisor = 2 * (divs - 1);
+    // Step must be even, for alignment patterns to agree with timing patterns
+    let step = ((total_dist + divisor / 2 + 1) / divisor) * 2;
+    let mut coords = vec![6];
+    for i in (0..=(divs - 2)).rev() {
+        coords.push(size - 7 - i * step);
+    }
+    coords
+}
+
+fn write_alignment_blocks(image: &mut RgbaImage, block_size: u32) {
+    let version = (image.width() / block_size - 17) / 4;
+    let size = image.width();
+    let data_size = size / block_size;
+    let coords = alignment_coord_list(version, data_size);
+    let alignment_block = create_alignment_block(block_size);
+
+    for &x in &coords {
+        for &y in &coords {
+            // Skip the corners (where position blocks are)
+            if (x == 6 && y == 6)
+                || (x == 6 && y == data_size - 7)
+                || (x == data_size - 7 && y == 6)
+            {
+                continue;
+            }
+            let top_left_x = x * block_size - (4 * block_size) / 2;
+            let top_left_y = y * block_size - (4 * block_size) / 2;
+            copy_paste(
+                &alignment_block,
+                image,
+                0,
+                0,
+                5 * block_size,
+                5 * block_size,
+                top_left_x,
+                top_left_y,
+            );
+        }
+    }
+}
+
 fn main() {
     let args = Args::parse();
     let target = args.target.unwrap_or("out.png".to_owned());
@@ -174,6 +349,10 @@ fn main() {
             tiler.tile(x as u32, y as u32, *val);
         }
     }
-
-    tiler.finalize().save(target).unwrap();
+    let mut image = tiler.finalize();
+    if args.style != Tilers::Base {
+        write_position_blocks(&mut image, args.block_size);
+        write_alignment_blocks(&mut image, args.block_size);
+    }
+    image.save(target).unwrap();
 }
